@@ -3,12 +3,11 @@
     "type": "project",
     "require": {
         "composer-runtime-api": "^2.0",
-        "shopware/administration": "~v6.4.15",
-        "shopware/core": "~v6.4.15",
-        "shopware/elasticsearch": "~v6.4.15",
-        "shopware/storefront": "~v6.4.15",
-        "symfony/flex": "~2",
-        "symfony/runtime": "^5.0|^6.0"
+        "shopware/administration": "*",
+        "shopware/core": "6.7.*",
+        "shopware/elasticsearch": "*",
+        "shopware/storefront": "*",
+        "symfony/flex": "~2"
     },
     "repositories": [
         {
@@ -31,12 +30,22 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "composer",
+            "url": "https://shopware.github.io/conflicts/"
         }
     ],
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "config": {
         "allow-plugins": {
+            "php-http/discovery": true,
             "symfony/flex": true,
             "symfony/runtime": true
         },
@@ -64,6 +73,7 @@
         }
     },
     "require-dev": {
-        "deployer/deployer": "^7.3"
+        "deployer/deployer": "^7.3",
+        "shopware/dev-tools": "^1.6"
     }
 }

@@ -1,6 +1,3 @@
 [submodule "custom/plugins/YoxaMyPlugin"]
 	path = custom/plugins/YoxaMyPlugin
 	url = git@github.com:xavgru12/ShopwareYoxaPlugin.git
-[submodule "custom/plugins/SwagPayPal"]
-	path = custom/plugins/SwagPayPal
-	url = https://github.com/shopware/SwagPayPal.git

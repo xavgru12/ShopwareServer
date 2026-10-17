@@ -1,138 +1,145 @@
 # Shopware Server
 
-Shopware 6.4 project (Symfony Flex template). Setup follows the official guide:
-https://developer.shopware.com/docs/v6.5/guides/installation/template.html
+Shopware 6.7 project (Symfony Flex template) with the official Docker dev
+environment (`ghcr.io/shopware/docker-dev` image, per the Shopware 6.7 Docker
+setup).
 
 ## Prerequisites
 
-- PHP 8.1 with extensions
-- Composer
 - Docker + Docker Compose
-- Symfony CLI
+- `make` (optional — wraps the docker compose commands)
 
-### PHP
+PHP, Composer, MySQL and Caddy all run inside Docker; nothing else needs to be
+installed on the host.
+
+## URLs
+
+| Service | URL |
+|---|---|
+| Storefront | http://127.0.0.1:8000 |
+| Admin | http://127.0.0.1:8000/admin |
+| Adminer (DB UI) | http://127.0.0.1:9080 |
+| Mailpit (mail UI) | http://127.0.0.1:8025 |
+
+Default admin credentials: `admin` / `shopware` (change after first login).
+
+## Daily development
 
 ```bash
-sudo add-apt-repository ppa:ondrej/php
-sudo apt-get install -y php8.1-fpm php8.1-mysql php8.1-curl php8.1-gd php8.1-xml php8.1-zip php8.1-opcache php8.1-mbstring php8.1-intl php8.1-cli
+make up                        # docker compose up -d
+make shell                     # bash inside the web container
+make down                      # stop containers
+docker compose logs -f web     # logs
 ```
 
-Choose the PHP version in case several are installed:
+All console commands run inside the `web` container:
 
 ```bash
-sudo update-alternatives --config php
+docker compose exec web bin/console cache:clear
+docker compose exec web bin/console plugin:list
+docker compose exec web bin/console dal:refresh:index
 ```
 
-### Composer
+### Plugins
+
+Plugins live as git submodules under `custom/plugins/` (e.g. `YoxaMyPlugin`),
+loaded via the composer path repositories. Install/activate with:
 
 ```bash
-sudo apt install composer -y
+docker compose exec web bin/console plugin:install --activate YoxaMyPlugin
 ```
 
-### Symfony CLI
+Git operations for plugins happen inside the submodule repos; the container
+only runs the code.
 
-Required to run the app locally (see "Run" below). Install per https://symfony.com/download
+### Frontend development
+
+Only rebuild assets after JS/SCSS changes:
+
+```bash
+make build-storefront            # bin/build-storefront.sh in container
+make watch-storefront            # hot reload proxy (uses port 9998)
+make build-administration
+```
 
 ## Install from scratch
 
-### 1. Database
+1. `docker compose up -d` (wait until the database is healthy)
+2. `docker compose exec web composer install`
+3. `docker compose exec web bin/console system:install --basic-setup --create-database`
+
+   > **Caution:** `--create-database` drops the current database.
+4. Activate plugins and clear the cache:
+
+   ```bash
+   docker compose exec web bin/console plugin:install --activate YoxaMyPlugin
+   docker compose exec web bin/console cache:clear
+   ```
+
+`installShopware.sh` runs the same steps; the `make setup` target adds
+`--drop-database --force` and is only for fresh setups.
+
+## Updating Shopware (official flow)
+
+1. Bump the version constraint in `composer.json` (currently
+   `"shopware/core": "6.7.*"`).
+2. In the container:
+
+   ```bash
+   docker compose exec web composer update --no-interaction
+   ```
+
+3. Sync the project files (`.env`, `bin/`, `config/`, `public/index.php`,
+   `docker-compose.yml`, …) to the new version via the official recipe reset —
+   this is what the `shopware-cli project upgrade` wizard runs internally:
+
+   ```bash
+   docker compose exec web composer symfony:recipes:install --force --reset
+   ```
+
+   > `composer recipes:update` (the interactive variant) requires a clean
+   > git index; use the `--force --reset` variant when changes are
+   > uncommitted.
+4. Restore project-specific values that the recipe reset overwrites with
+   template defaults — **`.env`** (DB credentials, `MAILER_DSN`,
+   `APP_ENV=debug`, `MYSQL_VERSION=8.0`) and the `database` service in
+   `docker-compose.yml` (**MySQL 8.0**, not the template's mariadb default —
+   the existing data volume is MySQL).
+5. Run migrations and finish:
+
+   ```bash
+   docker compose exec web bin/console system:update:finish
+   ```
+
+6. Verify: `bin/console --version`, `plugin:list`, open the storefront/admin.
+
+## Demo data
+
+The shop runs the official Demostore demo data (faker-generated):
 
 ```bash
-docker compose up -d database
+docker compose exec web bin/console framework:demodata -e prod --reset-defaults \
+  --products 60 --customers 3 --categories 3 --media 60 --orders 2 \
+  --manufacturers 5 --tags 10 --reviews 10 --promotions 2 --properties 2 \
+  --mail-template 0 --mail-header-footer 0 --users 0
+docker compose exec web bin/console dal:refresh:index
 ```
 
-Wait until MySQL is ready:
-
-```bash
-docker exec shopwareserver-database-1 mysqladmin ping -h127.0.0.1 -uroot -p'<db-password>' --silent
-```
-
-> **Important:** `MYSQL_VERSION=8.0` in `.env` is required. The `mysql:8` tag
-> now resolves to MySQL 8.4, which rejects foreign keys referencing composite
-> primary keys — Shopware 6.4 migrations rely on this everywhere and fail with
-> `ERROR 6125 Failed to add the foreign key constraint. Missing unique key`.
-> Shopware 6.4 only supports MySQL 8.0.
-
-### 2. Install Shopware
-
-Make sure `APP_URL` in `.env` is set to your dev URL — `system:install` creates
-the storefront sales channel with exactly this URL as its domain. Then run:
-
-Caution: Create database will drop the current database.
-```bash
-composer install
-bin/console system:install --basic-setup --create-database
-```
-
-### 3. Activate plugins
-
-```bash
-bin/console plugin:install --activate SwagPayPal
-bin/console plugin:install --activate YoxaMyPlugin
-```
-
-```bash
-bin/console cache:clear
-```
-
-If the shop was already installed with a different/wrong `APP_URL`, the sales
-channel domain in the DB is wrong and needs fixing — see
-"Fix sales channel domain" below. On a fresh install with the correct
-`APP_URL`, no DB commands are needed.
-
-## Run
-
-```bash
-symfony serve -d --port=8000 --no-tls
-```
-
-Symfony CLI auto-detects the document root (`public/`) and the passthru
-(`public/index.php`), so static assets and routed URLs both work.
-
-- Storefront: http://localhost:8000
-- Admin: http://localhost:8000/admin
-
-Stop the server:
-
-```bash
-symfony server:stop
-```
-
-Logs:
-
-```bash
-symfony server:log
-```
-
-## Default credentials
-
-- Admin user: `admin`
-- Admin password: `shopware`
-
-Change after first login.
-
-## Fix sales channel domain (only if the shop was already set up)
-
-Only needed when the shop was already installed with a different/wrong
-`APP_URL`. The storefront only answers on domains registered in
-`sales_channel_domain`; a wrong entry causes
-`Unable to find a matching sales channel`.
-
-Update the existing domain to the local dev URL:
-
-```bash
-docker exec shopwareserver-database-1 mysql -u shopware -p'<db-password>' shopware -e "UPDATE sales_channel_domain SET url='http://127.0.0.1:8000' WHERE url='http://127.0.0.1/ShopwareServer/public';"
-```
-
-Optionally add `localhost:8000` as a second domain:
-
-```bash
-docker exec shopwareserver-database-1 mysql -u shopware -p'<db-password>' shopware -e "INSERT INTO sales_channel_domain (id, url, sales_channel_id, language_id, currency_id, snippet_set_id, created_at, updated_at) SELECT UNHEX(REPLACE(UUID(),'-','')), 'http://localhost:8000', sales_channel_id, language_id, currency_id, snippet_set_id, NOW(3), NOW(3) FROM sales_channel_domain WHERE url='http://127.0.0.1:8000' LIMIT 1;"
-```
-
-```bash
-bin/console cache:clear
-```
+- Requires `shopware/dev-tools` (dev dependency).
+- Must run with `-e prod` (the command refuses other environments).
+- **Known core bug:** `--tags` must be `>= 10` — the media generator picks a
+  random 0–9 tags and crashes with `Cannot get N elements, only M in array`
+  if fewer exist.
+- `--mail-template 0` keeps the YoxaMyPlugin mail template changes intact.
+- `--reset-defaults` only zeroes the generator counts — it does **not**
+  delete existing data. Old (e.g. 6.4-era) demo categories survive a
+  regeneration; delete them first for a clean tree.
+- After regenerating, clear the cache pools and restart `web`, otherwise the
+  header navigation can keep serving an empty tree (see Troubleshooting).
+- The demo category layouts ship with a sidebar section (category
+  navigation + filter next to the top navbar). That sidebar was removed
+  from both demo layouts (via SQL on `cms_slot`/`cms_block`/`cms_section`)
+  so category pages render single-column. Re-running demodata restores it.
 
 ## Configuration
 
@@ -140,83 +147,86 @@ Key settings in `.env`:
 
 | Variable | Value | Purpose |
 |---|---|---|
+| `APP_ENV` | `debug` | Dev environment (template default is `prod`) |
 | `APP_URL` | `http://127.0.0.1:8000` | Public app URL |
-| `DATABASE_URL` | `mysql://shopware:!ChangeMe!@127.0.0.1:3306/shopware` | DB connection, matches the `database` service in `docker-compose.yml` |
-| `MYSQL_VERSION` | `8.0` | Pin MySQL to 8.0 (see note above) |
-| `SHOPWARE_ES_ENABLED` | `0` | Elasticsearch/OpenSearch disabled (OpenSearch container not required) |
+| `DATABASE_URL` | `mysql://shopware:!ChangeMe!@database:3306/shopware` | Host `database` = compose service name |
+| `MYSQL_VERSION` | `8.0` | Pin MySQL to 8.0 — MySQL 8.4 rejects the composite FK keys Shopware uses |
+| `SHOPWARE_ES_ENABLED` | `0` | Elasticsearch/OpenSearch disabled |
 
-`docker-compose.override.yml` pins the database to host port `3306` so the
-`.env` connection string stays stable (otherwise Compose assigns a random
-host port).
+`docker-compose.override.yml` exposes the database on host port `3306`.
+Real credentials belong in `.env.local` (gitignored); `.env` only carries
+placeholders/dev values.
 
-> Note: Shopware recommends putting overrides in `.env.local` because `.env`
-> is overwritten by the web updater. Currently the overrides live in `.env`.
+### docker-compose specifics (deviations from the template)
 
-## Placeholders to change
+- `web`: official `ghcr.io/shopware/docker-dev:php8.3-node24-caddy` image,
+  project mounted at `/var/www/html`, runs as uid 1000 (matches the host
+  user — no permission issues).
+- Ports are bound to `127.0.0.1` (IPv4 loopback only). On this machine
+  `localhost` resolves to `::1` first, and Shopware rejects requests whose
+  `Host` header is `[::1]:8000` with a "Domain Mapping Misconfiguration"
+  400 — binding IPv4-only makes browsers fall back to `127.0.0.1`.
+- `dns: 1.1.1.1, 8.8.8.8` — this host's systemd-resolved stub
+  (`127.0.0.53`) is unreachable from containers.
+- Host port `8080` was busy (unrelated VM), so the template's
+  `8080:8080` mapping was dropped; only `8000`/`9999`/`9998`/`5173`/`5773`
+  are published.
+- `database` stays `mysql:8.0-oracle` with the existing `db-data` volume
+  (template default is mariadb 11.8 — do not switch on an existing volume).
 
-The following values are placeholders or machine-specific secrets and **must
-be replaced** for any real deployment:
+## Deployment
 
-| Placeholder | Where | Example replacement |
-|---|---|---|
-| `!ChangeMe!` (DB passwords) | `docker-compose.yml` defaults and `DATABASE_URL` in `.env` (URL-encoded as `%21ChangeMe%21`) | `<db-password>` |
-| `MAILER_DSN` (contains real Gmail credentials) | `.env` | `<mailer-dsn>` (e.g. `null://null` for local dev, `smtp://<user>:<password>@<host>:<port>` for production) |
-| `APP_URL` | `.env` and `sales_channel_domain.url` in the DB | `<your-domain>` (e.g. `https://shop.example.com`) |
+Deployer to all-inkl shared hosting (`deploy.php`, run via
+`./deployShopware.sh`):
 
-`APP_SECRET` (Symfony secret for CSRF/session signing) and `INSTANCE_ID`
-(unique shop identifier) are generated by Shopware itself — normally by
-`bin/console system:setup`, which writes them into `.env`. The values shipped
-in the Symfony Flex template are just pre-generated defaults; both should be
-random and unique per installation.
+- Webhost requirements: PHP >= 8.2, MySQL >= 8.0.22 or MariaDB >= 10.11.6.
+- After deploy on the server:
 
-Example `.env` with placeholders:
-
-```dotenv
-APP_URL=https://<your-domain>
-APP_SECRET=<app-secret>
-INSTANCE_ID=<instance-id>
-DATABASE_URL="mysql://shopware:<db-password>@127.0.0.1:3306/shopware"
-MAILER_DSN=smtp://<user>:<password>@<host>:<port>
-MYSQL_VERSION=8.0
-```
-
-If you change the DB password, set it in both `docker-compose.yml`
-(`MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`) and `DATABASE_URL`, then recreate
-the DB container (`docker compose up -d --force-recreate database`).
+  ```bash
+  bin/console system:update:prepare
+  bin/console system:update:finish
+  ```
 
 ## Troubleshooting
 
-### `ERROR 6125 Failed to add the foreign key constraint. Missing unique key`
+### MySQL 8.4 breaks migrations (`ERROR 6125`)
 
-The MySQL image is 8.4 (see the note above). Check with
-`docker exec shopwareserver-database-1 mysql -uroot -p'<db-password>' -e "SELECT VERSION();"`.
-Fix: set `MYSQL_VERSION=8.0` in `.env`, then recreate the container and volume:
+`mysql:8` resolves to MySQL 8.4, which rejects foreign keys referencing
+composite primary keys — Shopware relies on these. Keep `MYSQL_VERSION=8.0`
+in `.env` (Shopware 6.7 supports MySQL >= 8.0.22).
+
+### Port 8000 already in use
+
+Stop the old Symfony dev server (`symfony server:stop`) or change the host
+port mapping of the `web` service in `docker-compose.yml`.
+
+### `Unable to find a matching sales channel`
+
+The requested host isn't registered in `sales_channel_domain`. Check
+`bin/console sales-channel:list` and update the domain if `APP_URL` changed.
+
+### Old demo layouts look broken after an upgrade
+
+Pre-6.7 CMS layouts (e.g. category pages with sidebar navigation) render
+confusingly in the new theme. Regenerate demo data (see above).
+
+### Navigation/navbar empty or stale after data changes
+
+The category tree for the header navigation is cached in the filesystem
+cache pool (`cache.object`, tag `category_level_loader`). Under some
+conditions (e.g. mass deletes, or demodata running with `-e prod` while
+HTTP runs in the `debug` env) stale entries survive `cache:clear` and
+`cache:pool:clear` — the navbar then renders only "Home".
+
+Fix: delete the pool directories and restart the web container:
 
 ```bash
-docker compose stop database && docker compose rm -f database
-docker volume rm shopwareserver_db-data
-docker compose up -d database
+docker compose exec web sh -c 'rm -rf var/cache/*/pools/*'
+docker compose restart web
 ```
 
-### `Cannot create private key config/jwt/private.pem, it already exists`
+### `localhost` shows "Shopware Domain Mapping Misconfiguration" (400)
 
-Stale JWT keys from a previous install attempt. Delete them and re-run
-`bin/console system:install`:
-
-```bash
-rm config/jwt/private.pem config/jwt/public.pem
-```
-
-### Blank admin page
-
-The assets (`/bundles/...`) aren't being served. Run via `symfony serve`.
-
-### `Unable to find a matching sales channel for the request`
-
-The requested host isn't registered in `sales_channel_domain`. See
-"Fix sales channel domain" above.
-
-### `Unable to connect to database` / wrong port
-
-The DB container must be running (`docker compose up -d database`) and
-`DATABASE_URL` must use port `3306` (see Configuration).
+The browser sends `Host: [::1]:8000` over IPv6, which isn't a registered
+sales channel domain. The `web` ports are bound to `127.0.0.1` only, so use
+`http://127.0.0.1:8000` (or make sure the browser falls back to IPv4).

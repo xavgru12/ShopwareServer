@@ -1,3 +1,6 @@
 [submodule "custom/plugins/YoxaMyPlugin"]
 	path = custom/plugins/YoxaMyPlugin
 	url = git@github.com:xavgru12/ShopwareYoxaPlugin.git
+[submodule "custom/apps/StripePaymentsApp"]
+	path = custom/apps/StripePaymentsApp
+	url = git@github.com:xavgru12/shopware-stripe.git

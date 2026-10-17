@@ -54,6 +54,8 @@ services:
       - .env.local
     environment:
       HOST: 0.0.0.0
+      APP_ENV: debug
+      APP_SECRET: 1e953eeb53c7ef5a6c61569fb3238834
       DATABASE_URL: mysql://shopware:%21ChangeMe%21@database:3306/shopware
       MAILER_DSN: smtp://mailer:1025
       TRUSTED_PROXIES: REMOTE_ADDR

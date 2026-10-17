@@ -141,6 +141,125 @@ docker compose exec web bin/console dal:refresh:index
   from both demo layouts (via SQL on `cms_slot`/`cms_block`/`cms_section`)
   so category pages render single-column. Re-running demodata restores it.
 
+## Stripe payments — step-by-step setup
+
+Official **Stripe Payments for Shopware 6 App** (`StripePaymentsApp`, free, by
+Stripe). Requires Shopware >= 6.5.
+
+### 1. Stripe account + test keys
+
+1. Create an account at https://dashboard.stripe.com/register (or log in).
+2. In the Dashboard top right, make sure **Test mode** is toggled on.
+3. Developers → API keys → copy the **Publishable key** (`pk_test_…`) and
+   **Secret key** (`sk_test_…`).
+
+### 2. Shopware Account (Shopware Store) login
+
+Required once per shop; the Store login needs a domain registered under
+account.shopware.com → Shops (`localhost`/`127.0.0.1` are rejected — use your
+real domain, e.g. `yoxa.eu`):
+
+```bash
+docker compose exec web bin/console store:login \
+  --shopwareId=<shopware-account-email> --user=admin --host=yoxa.eu
+```
+
+- `--user` is the local admin username (`admin`)
+- the password prompt expects the **Shopware Account** password (not the shop
+  password)
+
+### 3. Download and install the app
+
+```bash
+docker compose exec web bin/console store:download -p StripePaymentsApp
+docker compose exec web bin/console app:install --activate --force StripePaymentsApp
+```
+
+`--force` auto-grants the permission list the app requests. Verify with
+`bin/console app:list` — StripePaymentsApp active.
+
+> The app registers against the shop's public URL. For a local shop this
+> requires the HTTPS tunnel first (see below), otherwise registration gets a
+> 403 from Stripe's backend.
+
+### 4. Make the shop reachable (local dev tunnel)
+
+The Stripe backend only talks to publicly reachable HTTPS shops:
+
+```bash
+docker run -d --name cloudflared --network host \
+  cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://localhost:8000
+docker logs cloudflared 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1
+```
+
+Then point the shop at the tunnel URL:
+
+1. `.env`: `APP_URL=https://<tunnel-url>`
+2. Add the URL as a sales channel domain (Admin → Settings → Sales channels →
+   Storefront → Domains → add)
+3. `docker compose restart web`
+4. Re-run the `app:install` step (registration binds to the shop URL)
+
+Caveat: the quick-tunnel URL changes on every tunnel restart — repeat these
+steps after a restart. Production (`yoxa.eu`) needs no tunnel.
+
+### 5. Enter the API keys
+
+1. Admin → Extensions → **Stripe** (the app's config UI opens)
+2. Paste the publishable + secret **test** keys from step 1
+3. Set mode to **Test**
+4. Optionally toggle payment methods (cards always on; Apple Pay needs a
+   verified domain — see troubleshooting)
+
+### 6. Checkout setup
+
+The app auto-creates its payment method **"Pay online"** and assigns it to the
+sales channels on registration. Verify in Admin → Settings → Payment:
+
+- "Pay online" is active and assigned to the sales channel
+- Deactivate/delete other payment methods if Stripe should be the only one
+  (see note below: deleting needs the sales channel defaults updated)
+
+### 7. Test purchase
+
+1. Open the shop via the **tunnel URL** (not localhost)
+2. Add a product → checkout → register as guest → confirm
+3. The Stripe card form appears on the confirm page — use the test cards
+4. On success the order goes to `/checkout/finish`; in the DB the transaction
+   state is `paid` with `custom_fields.stripe_payment_context` containing
+   `charge_id`/`payment_intent_id`
+
+### Go-live checklist
+
+- Dashboard: switch to **live keys**, verify the domain for Apple Pay
+  (Settings → Payment methods → Apple Pay → Add domain)
+- App config: enter live keys, mode **Live**
+- Webhook: the app registers its webhooks itself via the shop URL — make sure
+  the production shop is reachable on `https://<domain>`
+- Re-run `app:install` on the production shop (registration binds to the
+  production URL)
+
+### Stripe test cards
+
+With Stripe **test mode** keys configured:
+
+| Card | Purpose |
+|---|---|
+| `4242 4242 4242 4242` (any future expiry, any CVC) | Successful payment, no 3-D Secure |
+| `4000 0027 6000 3184` | Forces a 3-D Secure test flow ("Complete authentication") |
+| `4000 0000 0000 0002` | Declined card |
+| `4000 0000 0000 9995` | Insufficient funds |
+
+### Deleting other payment methods (Stripe only)
+
+1. Deactivate first (`payment_method.active = 0`) — safer than deleting
+2. If you delete via DAL: also update `sales_channel.payment_method_id`,
+   `sales_channel.payment_method_ids`, and any `sales_channel_api_context`
+   payloads still referencing the old ids, otherwise the cached sales channel
+   context throws "Could not find payment method with id …"
+3. Orders referencing a method block deletion (FK) — delete those orders
+   first (demo data) or leave the method deactivated
+
 ## Configuration
 
 Key settings in `.env`:

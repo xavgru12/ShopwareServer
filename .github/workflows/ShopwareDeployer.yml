@@ -24,8 +24,9 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/debug_key
           chmod 600 ~/.ssh/debug_key
-          ssh-keygen -lf ~/.ssh/debug_key || true
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/debug_key -o StrictHostKeyChecking=accept-new" git ls-remote git@github.com:xavgru12/shopware-stripe.git HEAD || true
+          echo "::warning::bytes=$(wc -c < ~/.ssh/debug_key) lines=$(wc -l < ~/.ssh/debug_key)"
+          echo "::warning::ssh-keygen: $(ssh-keygen -lf ~/.ssh/debug_key 2>&1)"
+          echo "::warning::ls-remote: $(GIT_SSH_COMMAND='ssh -i ~/.ssh/debug_key -o StrictHostKeyChecking=accept-new' git ls-remote git@github.com:xavgru12/shopware-stripe.git HEAD 2>&1 | head -2)"
 
       - uses: actions/checkout@v4
         with:

@@ -250,6 +250,15 @@ With Stripe **test mode** keys configured:
 | `4000 0000 0000 0002` | Declined card |
 | `4000 0000 0000 9995` | Insufficient funds |
 
+A successful sandbox order records `charge_id`, `payment_intent_id` and
+`payment_method_id` in the order transaction's
+`custom_fields.stripe_payment_context`.
+
+Note on Apple Pay: it only appears after the domain is registered/verified in
+the Stripe dashboard **and** the customer is on an Apple device (Safari +
+Wallet). The `…trycloudflare.com` tunnel domain can't be verified, so Apple
+Pay never shows in local tests — expected, not a bug.
+
 ### Deleting other payment methods (Stripe only)
 
 1. Deactivate first (`payment_method.active = 0`) — safer than deleting
@@ -294,6 +303,31 @@ placeholders/dev values.
   (template default is mariadb 11.8 — do not switch on an existing volume).
 
 ## Deployment
+
+### Test (test.yoxa.eu) — automatic
+
+Every push to **any branch** triggers `.github/workflows/ShopwareDeployer.yml`:
+
+- **`main`** → `dep deploy production` → `/www/htdocs/w01a5092/ShopwareServer`
+  (yoxa.eu)
+- **any other branch** → `dep deploy test` → `/www/htdocs/w01a5092/TestShop`
+  (test.yoxa.eu)
+
+Both targets live in `deploy.php` as `host('production')` and `host('test')`
+— same task chain, only `deploy_path` differs. The workflow runs PHP 8.3 +
+composer install on the runner, then `deployphp/action` uploads the
+checked-out branch.
+
+Requirements:
+
+- GitHub secret `WEBHOST_SSH_SHOPWARE_PRIVATE_KEY` = PEM-format SSH private
+  key of the deploy user (real newlines, no passphrase)
+- Shared `.env` on the server: `APP_URL=https://test.yoxa.eu` + test
+  `DATABASE_URL`
+- First deploy needs the shared folder/database set up on the webhost
+  (copy the shared files and run `system:install` there once)
+
+### Production (all-inkl)
 
 Deployer to all-inkl shared hosting (`deploy.php`, run via
 `./deployShopware.sh`):

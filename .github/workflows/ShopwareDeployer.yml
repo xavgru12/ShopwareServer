@@ -60,7 +60,7 @@ jobs:
         with:
           private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
           dep: deploy production
-          deployer-binary: "vendor/deployer/deployer/dep"
+          deployer-binary: "vendor/bin/dep"
           verbosity: -vvv
           skip-ssh-setup: false
 
@@ -70,6 +70,6 @@ jobs:
         with:
           private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
           dep: deploy test
-          deployer-binary: "vendor/deployer/deployer/dep"
+          deployer-binary: "vendor/bin/dep"
           verbosity: -vvv
           skip-ssh-setup: false

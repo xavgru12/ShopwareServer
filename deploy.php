@@ -167,6 +167,28 @@ task('sw:app:install', static function () {
     }
 });
 
+// Applies the idempotent tax/snippet SQL (Yoxa plugin) to the remote database.
+// DB snippet rows override the plugin's snippet JSON files at runtime, so the
+// SQL must run on every deploy to keep both in sync.
+task('sw:tax-snippets', static function () {
+    $env = run('grep -E "^DATABASE_URL" {{deploy_path}}/shared/.env | head -1');
+    if (!preg_match('#^DATABASE_URL=["\']?mysql://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^"\']+)#', $env, $m)) {
+        writeln('<comment>sw:tax-snippets: could not parse DATABASE_URL, skipping</comment>');
+        return;
+    }
+
+    [, $user, $pass, $host, $port, $db] = $m;
+    $port = $port ?: '3306';
+
+    $sql = '{{release_path}}/custom/plugins/YoxaMyPlugin/mail-template-tax-removal.sql';
+    if (!test("[ -f $sql ]")) {
+        writeln('<comment>sw:tax-snippets: SQL file not found, skipping</comment>');
+        return;
+    }
+
+    run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
+});
+
 /**
  * Grouped SW deploy tasks.
  */
@@ -180,6 +202,7 @@ task('sw:deploy', [
     'sw:cache:clear',
     'sw:plugin:install:all',
     'sw:plugin:update:all',
+    'sw:tax-snippets',
     'sw:cache:clear',
 ]);
 

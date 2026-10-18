@@ -16,6 +16,9 @@ add('recipes', ['shopware']);
 
 set('bin/console', '{{bin/php}} {{release_or_current_path}}/bin/console');
 
+// Shopware 6.7 requires PHP >= 8.2; the webhost default (/usr/bin/php) is 8.1
+set('bin/php', getenv('WEBHOST_PHP') ?: '/usr/bin/php83');
+
 set('default_timeout', 3600); // Increase when tasks take longer than that.
 
 set('repository', 'git@github.com:xavgru12/ShopwareServer.git');

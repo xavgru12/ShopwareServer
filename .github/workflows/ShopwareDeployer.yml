@@ -16,7 +16,7 @@ concurrency: production_environment
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment: ShopwareDeployer
 
     steps:
       - name: Debug PRIVATE_REPO_KEY

@@ -21,6 +21,7 @@ jobs:
       - name: Debug PRIVATE_REPO_KEY
         shell: bash
         run: |
+          mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/debug_key
           chmod 600 ~/.ssh/debug_key
           ssh-keygen -lf ~/.ssh/debug_key || true

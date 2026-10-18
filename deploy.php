@@ -150,6 +150,17 @@ task('sw:writable:jwt', static function () {
     run('cd {{release_path}} && find config/jwt/ -type f -exec chmod -R 660 {} +');
 });
 
+set('license_host', 'yoxa.eu'); // domain registered in the Shopware Account for store/app licensing
+
+task('sw:app:install', static function () {
+    run('cd {{release_path}} && {{bin/console}} system:config:set core.store.licenseHost {{license_host}}');
+    if (!test('cd {{release_path}} && {{bin/console}} app:list | grep -q StripePaymentsApp')) {
+        run('cd {{release_path}} && {{bin/console}} app:install --activate --force StripePaymentsApp');
+    } else {
+        run('cd {{release_path}} && {{bin/console}} app:refresh StripePaymentsApp');
+    }
+});
+
 /**
  * Grouped SW deploy tasks.
  */
@@ -159,6 +170,7 @@ task('sw:deploy', [
     'sw:theme:refresh',
     'sw:theme:compile',
     'sw:scheduled-task:register',
+    'sw:app:install',
     'sw:cache:clear',
     'sw:plugin:install:all',
     'sw:plugin:update:all',

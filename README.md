@@ -322,10 +322,43 @@ Requirements:
 
 - GitHub secret `WEBHOST_SSH_SHOPWARE_PRIVATE_KEY` = PEM-format SSH private
   key of the deploy user (real newlines, no passphrase)
+- GitHub secret `PRIVATE_REPO_KEY` = GitHub SSH deploy key for the private
+  submodules (`shopware-stripe`, `ShopwareYoxaPlugin`) — used by the
+  `webfactory/ssh-agent` step before checkout
 - Shared `.env` on the server: `APP_URL=https://test.yoxa.eu` + test
   `DATABASE_URL`
 - First deploy needs the shared folder/database set up on the webhost
   (copy the shared files and run `system:install` there once)
+
+The Stripe app ships as a git submodule (`custom/apps/StripePaymentsApp`) and
+is installed automatically on every deploy by the `sw:app:install` task
+(`app:install` on first run, `app:refresh` afterwards). It also sets
+`core.store.licenseHost` (`set('license_host', 'yoxa.eu')` in `deploy.php`)
+which the store app-signature API requires. Enter the Stripe API keys once
+per shop in Admin → Extensions → Stripe.
+
+### Pre-compilation of frontend assets (currently disabled)
+
+The webhost has no Node.js, so frontend source changes must be compiled
+**before** the deploy (`sw-build-without-db` in `deploy.php`):
+
+- **Theme CSS** (variables, colors, layout styles) is compiled server-side by
+  `sw:theme:compile` (PHP, part of `sw:deploy`) — always happens, no Node
+  needed.
+- **Source SCSS/JS** (custom theme styles, storefront/admin JS plugins) needs
+  the Node build: `bin/build-js.sh` runs locally/CI and the built assets are
+  uploaded. `sw-build-without-db:get-remote-config` first downloads
+  `plugins.json` + theme-config from the server's current release so the build
+  works without DB access (skipped on the very first deploy — no release yet).
+
+Why it's disabled: we run vanilla Shopware 6.7 without custom SCSS/JS, the
+admin/storefront JS ships prebuilt in the packages, and neither the local
+machine nor the CI runner has Node. Re-enable when frontend sources change:
+
+1. `deploy.php`: uncomment `before('deploy:update_code', 'sw-build-without-db');`
+2. Workflow: add `actions/setup-node@v4` (Node 22) before the deploy step
+3. Note: the first build on a fresh server skips the remote-config download
+   (no current release) — deploy once, then builds work from the second run on
 
 ### Production (all-inkl)
 

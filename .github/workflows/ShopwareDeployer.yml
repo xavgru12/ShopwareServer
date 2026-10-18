@@ -19,16 +19,6 @@ jobs:
     environment: ShopwareDeployer
 
     steps:
-      - name: Debug PRIVATE_REPO_KEY
-        shell: bash
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.PRIVATE_REPO_KEY }}" > ~/.ssh/debug_key
-          chmod 600 ~/.ssh/debug_key
-          echo "::warning::bytes=$(wc -c < ~/.ssh/debug_key) lines=$(wc -l < ~/.ssh/debug_key)"
-          echo "::warning::ssh-keygen: $(ssh-keygen -lf ~/.ssh/debug_key 2>&1)"
-          echo "::warning::ls-remote: $(GIT_SSH_COMMAND='ssh -i ~/.ssh/debug_key -o StrictHostKeyChecking=accept-new' git ls-remote git@github.com:xavgru12/shopware-stripe.git HEAD 2>&1 | head -2)"
-
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -44,15 +34,6 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Debug webhost SSH
-        shell: bash
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}" > ~/.ssh/webhost_key
-          chmod 600 ~/.ssh/webhost_key
-          echo "::warning::webhost key: $(ssh-keygen -lf ~/.ssh/webhost_key 2>&1)"
-          echo "::warning::ssh test: $(ssh -i ~/.ssh/webhost_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=15 ${USERNAME:-ssh-w01a5092}@${HOST:-w01a5092.kasserver.com} 'echo ok $(hostname)' 2>&1 | tail -3)"
 
       - name: Deploy to production (yoxa.eu)
         if: github.ref == 'refs/heads/main'

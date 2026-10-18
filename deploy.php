@@ -4,7 +4,7 @@
  *
  * Based on the official deployer shopware recipe; project-specific parts:
  * - shared `.env` (server config lives there)
- * - host('production') / host('test') aliases
+ * - host('production-server') / host('test-server') aliases
  * - plugin install/activate on deploy
  */
 
@@ -26,15 +26,15 @@ before('deploy', 'deploy:unlock');
 
 set('repository', 'git@github.com:xavgru12/ShopwareServer.git');
 
-// Production: yoxa.eu — deploy with `dep deploy production`
-host('production')
+// Production: yoxa.eu — deploy with `dep deploy production-server`
+host('production-server')
     ->setHostname(getenv('HOST') ?: 'w01a5092.kasserver.com')
     ->setRemoteUser(getenv('USERNAME') ?: 'ssh-w01a5092')
     ->set('deploy_path', '/www/htdocs/w01a5092/ShopwareServer')
     ->set('writable_mode', 'chmod');
 
-// Test: test.yoxa.eu — deploy with `dep deploy test`
-host('test')
+// Test: test.yoxa.eu — deploy with `dep deploy test-server`
+host('test-server')
     ->setHostname(getenv('HOST') ?: 'w01a5092.kasserver.com')
     ->setRemoteUser(getenv('USERNAME') ?: 'ssh-w01a5092')
     ->set('deploy_path', '/www/htdocs/w01a5092/TestShop')

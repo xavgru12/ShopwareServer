@@ -40,7 +40,7 @@ jobs:
         uses: deployphp/action@master
         with:
           private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
-          dep: deploy production
+          dep: deploy production-server
           deployer-binary: "vendor/bin/dep"
           verbosity: -vvv
           skip-ssh-setup: false
@@ -50,7 +50,7 @@ jobs:
         uses: deployphp/action@master
         with:
           private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
-          dep: deploy test
+          dep: deploy test-server
           deployer-binary: "vendor/bin/dep"
           verbosity: -vvv
           skip-ssh-setup: false

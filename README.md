@@ -203,13 +203,24 @@ Then point the shop at the tunnel URL:
 Caveat: the quick-tunnel URL changes on every tunnel restart — repeat these
 steps after a restart. Production (`yoxa.eu`) needs no tunnel.
 
-### 5. Enter the API keys
+### 5. Connect the Stripe account
 
-1. Admin → Extensions → **Stripe** (the app's config UI opens)
-2. Paste the publishable + secret **test** keys from step 1
-3. Set mode to **Test**
-4. Optionally toggle payment methods (cards always on; Apple Pay needs a
-   verified domain — see troubleshooting)
+The current connector version (>= 1.5) does not take manual API keys — you
+connect your Stripe account via OAuth:
+
+1. Admin → **Extensions → My extensions → Apps** tab → **Stripe** → ⋯
+   (overflow menu) → **Open extension**
+   (this opens the Stripe Configuration page hosted by Stripe's backend)
+2. Click **Connect with Stripe in Test Mode** (or **Live Mode** for
+   production) and sign in to the Stripe account — no keys are pasted in
+   Shopware
+3. In the Stripe Dashboard, enable the payment methods for your Shopware
+   account: **Settings → Payment methods → select your Shopware account** in
+   the platform dropdown → turn on the methods you want
+
+The connection can be set per sales channel: **Sales Channels** tab on the
+Stripe Configuration page → uncheck **Use default account** → connect the
+channel to its own Stripe account.
 
 ### 6. Checkout setup
 
@@ -231,9 +242,10 @@ sales channels on registration. Verify in Admin → Settings → Payment:
 
 ### Go-live checklist
 
-- Dashboard: switch to **live keys**, verify the domain for Apple Pay
+- Dashboard: switch to **live mode**, verify the domain for Apple Pay
   (Settings → Payment methods → Apple Pay → Add domain)
-- App config: enter live keys, mode **Live**
+- App config: **Connect with Stripe in Live Mode** and enable the live
+  payment methods in the Dashboard
 - Webhook: the app registers its webhooks itself via the shop URL — make sure
   the production shop is reachable on `https://<domain>`
 - Re-run `app:install` on the production shop (registration binds to the

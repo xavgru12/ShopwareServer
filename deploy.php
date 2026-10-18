@@ -21,6 +21,9 @@ set('bin/php', getenv('WEBHOST_PHP') ?: '/usr/bin/php83');
 
 set('default_timeout', 3600); // Increase when tasks take longer than that.
 
+// Always remove a stale deploy lock left over from a previous failed deploy
+before('deploy', 'deploy:unlock');
+
 set('repository', 'git@github.com:xavgru12/ShopwareServer.git');
 
 // Production: yoxa.eu — deploy with `dep deploy production`

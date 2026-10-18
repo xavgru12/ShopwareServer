@@ -18,14 +18,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Setup SSH for private submodules (shopware-stripe, YoxaMyPlugin)
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.PRIVATE_REPO_KEY }}
-
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          ssh-key: ${{ secrets.PRIVATE_REPO_KEY }}
+          ssh-known-hosts: github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2

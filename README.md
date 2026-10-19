@@ -194,7 +194,7 @@ docker compose exec web bin/console app:install --activate --force StripePayment
 
 ### 4. Make the shop reachable (local dev tunnel)
 
-The Stripe backend only talks to publicly reachable HTTPS shops:
+The Stripe/Shirtigo backends only talk to publicly reachable HTTPS shops:
 
 ```bash
 docker run -d --name cloudflared --network host \
@@ -204,11 +204,31 @@ docker logs cloudflared 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com'
 
 Then point the shop at the tunnel URL:
 
-1. `.env`: `APP_URL=https://<tunnel-url>`
+1. `.env.local`: `APP_URL=https://<tunnel-url>` (not `.env` — it is tracked)
 2. Add the URL as a sales channel domain (Admin → Settings → Sales channels →
    Storefront → Domains → add)
-3. `docker compose restart web`
-4. Re-run the `app:install` step (registration binds to the shop URL)
+3. Add the Caddy scheme forwarding for the tunnel host (required, see below)
+4. `docker compose up -d web`
+5. Re-run the `app:install` step (registration binds to the shop URL)
+
+**Required Caddy scheme fix:** cloudflared terminates TLS and forwards the
+request to the shop as plain `http://`, so Shopware sees scheme `http` and
+rejects the request with a 400 "Domain Mapping Misconfiguration" (the
+registered sales channel domain is `https://…`). Inject the original scheme
+for the tunnel host in `docker-compose.override.yml`:
+
+```yaml
+services:
+  web:
+    environment:
+      CADDY_EXTRA_CONFIG: |
+        @tunnelHost host <tunnel-host>.trycloudflare.com
+      CADDY_SERVER_EXTRA_DIRECTIVES: request_header @tunnelHost X-Forwarded-Proto https
+```
+
+(`request_header` needs a named matcher — inline matchers don't parse there.
+The matcher is scoped to the tunnel host, so http://127.0.0.1:8000 keeps
+working with scheme `http`.)
 
 Caveat: the quick-tunnel URL changes on every tunnel restart — repeat these
 steps after a restart. Production (`yoxa.eu`) needs no tunnel.

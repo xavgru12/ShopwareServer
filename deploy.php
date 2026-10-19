@@ -189,11 +189,19 @@ task('sw:tax-snippets', static function () {
     run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
 });
 
+// Regenerates media/thumbnail storage paths (media.path) that are NULL.
+// The 6.7 upgrade nulls paths and expects the post-update indexer to rebuild
+// them; deploys only run migrations, so run the updater explicitly.
+task('sw:media:update-path', function () {
+    run('cd {{release_path}} && {{bin/console}} media:update-path');
+});
+
 /**
  * Grouped SW deploy tasks.
  */
 task('sw:deploy', [
     'sw:database:migrate',
+    'sw:media:update-path',
     'sw:plugin:refresh',
     'sw:theme:refresh',
     'sw:theme:compile',

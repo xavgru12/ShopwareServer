@@ -1,8 +1,7 @@
 # Shopware Server
 
-Shopware 6.7 project (Symfony Flex template) with the official Docker dev
-environment (`ghcr.io/shopware/docker-dev` image, per the Shopware 6.7 Docker
-setup).
+Shopware 6.7 project with the official Docker dev environment
+(`ghcr.io/shopware/docker-dev` image, per the Shopware 6.7 Docker setup).
 
 ## Prerequisites
 
@@ -24,6 +23,17 @@ installed on the host.
 Default admin credentials: `admin` / `shopware` (change after first login).
 
 ## Daily development
+
+`make up` (see the `up` target in `Makefile`) touches `.env.local` and runs
+`docker compose up -d`. Compose starts `database` (MySQL 8), `opensearch` and
+the `web` service (`docker-compose.yml`):
+
+- `web` uses the official `ghcr.io/shopware/docker-dev:php8.3-node24-caddy`
+  image with the project mounted at `/var/www/html`; it only starts after the
+  database healthcheck passes.
+- The container maps port `8000` to `127.0.0.1:8000` on the host — Caddy
+  inside the container serves the shop on that port, so the storefront is
+  available at http://127.0.0.1:8000.
 
 ```bash
 make up                        # docker compose up -d
@@ -395,8 +405,8 @@ in `.env` (Shopware 6.7 supports MySQL >= 8.0.22).
 
 ### Port 8000 already in use
 
-Stop the old Symfony dev server (`symfony server:stop`) or change the host
-port mapping of the `web` service in `docker-compose.yml`.
+Free port 8000 (e.g. stop the process using it) or change the host port
+mapping of the `web` service in `docker-compose.yml`.
 
 ### `Unable to find a matching sales channel`
 

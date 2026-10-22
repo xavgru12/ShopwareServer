@@ -188,6 +188,29 @@ task('sw:tax-snippets', static function () {
 
     run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
 });
+
+// Order confirmation mail is sent after payment (sw:flow-after-payment), so
+// reword its "you will receive a separate notification once payment is made"
+// sentence. Idempotent REPLACE (see SQL file).
+task('sw:mail-template-after-payment', static function () {
+    $env = run('grep -E "^DATABASE_URL" {{deploy_path}}/shared/.env | head -1');
+    if (!preg_match('#^DATABASE_URL=["\']?mysql://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^"\']+)#', $env, $m)) {
+        writeln('<comment>sw:mail-template-after-payment: could not parse DATABASE_URL, skipping</comment>');
+        return;
+    }
+
+    [, $user, $pass, $host, $port, $db] = $m;
+    $port = $port ?: '3306';
+
+    $sql = '{{release_path}}/mail-template-after-payment.sql';
+    if (!test("[ -f $sql ]")) {
+        writeln('<comment>sw:mail-template-after-payment: SQL file not found, skipping</comment>');
+        return;
+    }
+
+    run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
+});
+
 // Mailer: use the environment MAILER_DSN (deletes core.mailerSettings.emailAgent
 // so Shopware falls back to the .env DSN; local = Mailpit, server = shared .env).
 // Idempotent (see SQL file).
@@ -208,6 +231,30 @@ task('sw:mailer-env', static function () {
     }
 
     run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
+});
+
+// Flow builder: order confirmation mail only after payment.
+// Deactivates the "Order placed" flow and points the "Payment enters status
+// paid" flow's mail action at the order_confirmation_mail template, then
+// regenerates the serialized flow payloads. Idempotent.
+task('sw:flow-after-payment', static function () {
+    $env = run('grep -E "^DATABASE_URL" {{deploy_path}}/shared/.env | head -1');
+    if (!preg_match('#^DATABASE_URL=["\']?mysql://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^"\']+)#', $env, $m)) {
+        writeln('<comment>sw:flow-after-payment: could not parse DATABASE_URL, skipping</comment>');
+        return;
+    }
+
+    [, $user, $pass, $host, $port, $db] = $m;
+    $port = $port ?: '3306';
+
+    $sql = '{{release_path}}/flow-after-payment.sql';
+    if (!test("[ -f $sql ]")) {
+        writeln('<comment>sw:flow-after-payment: SQL file not found, skipping</comment>');
+        return;
+    }
+
+    run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
+    run('cd {{release_path}} && {{bin/console}} dal:refresh:index --only=flow.indexer');
 });
 
 // Regenerates media/thumbnail storage paths (media.path) that are NULL.
@@ -232,6 +279,8 @@ task('sw:deploy', [
     'sw:plugin:install:all',
     'sw:plugin:update:all',
     'sw:tax-snippets',
+    'sw:flow-after-payment',
+    'sw:mail-template-after-payment',
     'sw:mailer-env',
     'sw:cache:clear',
 ]);

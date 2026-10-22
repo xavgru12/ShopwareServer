@@ -18,7 +18,7 @@ installed on the host.
 | Storefront | http://127.0.0.1:8000 |
 | Admin | http://127.0.0.1:8000/admin |
 | Adminer (DB UI) | http://127.0.0.1:9080 |
-| Mailpit (mail UI) | http://127.0.0.1:8025 |
+| Mailpit (mail UI) | random host port — see [Mailpit](#mailpit-local-mail-catcher) |
 
 Default admin credentials: `admin` / `shopware` (change after first login).
 
@@ -330,6 +330,7 @@ Key settings in `.env`:
 | `DATABASE_URL` | `mysql://shopware:!ChangeMe!@database:3306/shopware` | Host `database` = compose service name |
 | `MYSQL_VERSION` | `8.0` | Pin MySQL to 8.0 — MySQL 8.4 rejects the composite FK keys Shopware uses |
 | `SHOPWARE_ES_ENABLED` | `0` | Elasticsearch/OpenSearch disabled |
+| `MAILER_DSN` | `smtp://yoxa.eu@gmail.com:…@smtp.gmail.com:465` | Outgoing mail. The deploy task `sw:mailer-env` clears `core.mailerSettings.emailAgent`, so this env DSN is used everywhere (locally docker-compose overrides it with Mailpit) |
 
 `docker-compose.override.yml` exposes the database on host port `3306`.
 Real credentials belong in `.env.local` (gitignored); `.env` only carries
@@ -351,6 +352,32 @@ placeholders/dev values.
   are published.
 - `database` stays `mysql:8.0-oracle` with the existing `db-data` volume
   (template default is mariadb 11.8 — do not switch on an existing volume).
+
+## Mailpit (local mail catcher)
+
+Mailpit (`axllent/mailpit`, compose service `mailer`) is a fake SMTP server
+with a web inbox: mails the shop sends are captured instead of delivered.
+The `web` service points `MAILER_DSN` at it (`smtp://mailer:1025` in
+`docker-compose.yml`), and the deploy task `sw:mailer-env` keeps the store's
+mailer agent unset (`core.mailerSettings.emailAgent`), so the env DSN is
+actually used.
+
+- **SMTP:** container port `1025` — used in-container only (`smtp://mailer:1025`)
+- **Web UI:** container port `8025`, published on a **random host port**
+  (the compose template publishes only the container port, no fixed host
+  mapping — it changes on every `compose up`)
+
+Find the current host port:
+
+```bash
+docker compose port mailer 8025        # e.g. 0.0.0.0:32773
+docker compose ps mailer               # shows the full mapping
+```
+
+Then open `http://127.0.0.1:<port>` (e.g. http://127.0.0.1:32773). The UI
+shows every mail the shop sends; the API (`/api/v1/messages`) can be used
+to script checks. If the store's mailer agent is set to SMTP/local in the
+admin instead, mails bypass Mailpit and go out for real.
 
 ## Deployment
 
@@ -376,7 +403,8 @@ Requirements:
   submodules (`shopware-stripe`, `ShopwareYoxaPlugin`) — used by the
   `webfactory/ssh-agent` step before checkout
 - Shared `.env` on the server: `APP_URL=https://test.yoxa.eu` + test
-  `DATABASE_URL`
+  `DATABASE_URL` + `MAILER_DSN` (Gmail SMTP — mails only work if this is set,
+  the deploy clears the store's `emailAgent` so the env DSN wins)
 - First deploy needs the shared folder/database set up on the webhost
   (copy the shared files and run `system:install` there once)
 

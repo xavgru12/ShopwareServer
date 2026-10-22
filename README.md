@@ -39,6 +39,7 @@ the `web` service (`docker-compose.yml`):
 make up                        # docker compose up -d
 make shell                     # bash inside the web container
 make down                      # stop containers
+make dev-tunnel                # public HTTPS tunnel (Stripe/Shirtigo backends)
 docker compose logs -f web     # logs
 ```
 
@@ -194,44 +195,51 @@ docker compose exec web bin/console app:install --activate --force StripePayment
 
 ### 4. Make the shop reachable (local dev tunnel)
 
-The Stripe/Shirtigo backends only talk to publicly reachable HTTPS shops:
+The Stripe/Shirtigo backends only talk to publicly reachable HTTPS shops. One
+command sets everything up and prints the domain:
 
 ```bash
-docker run -d --name cloudflared --network host \
-  cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://localhost:8000
-docker logs cloudflared 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1
+make dev-tunnel
 ```
 
-Then point the shop at the tunnel URL:
+It does all of the following automatically:
 
-1. `.env.local`: `APP_URL=https://<tunnel-url>` (not `.env` — it is tracked)
-2. Add the URL as a sales channel domain (Admin → Settings → Sales channels →
-   Storefront → Domains → add)
-3. Add the Caddy scheme forwarding for the tunnel host (required, see below)
-4. `docker compose up -d web`
-5. Re-run the `app:install` step (registration binds to the shop URL)
+1. Brings the stack up and starts a `cloudflared` quick tunnel
+   (`cloudflare/cloudflared`, `--url http://localhost:8000`)
+2. Waits for the tunnel URL and writes it to `.env.local`
+   (`APP_URL` + `TUNNEL_HOST` — gitignored, not `.env` which is tracked)
+3. Recreates `web` and registers the URL as a sales channel domain via SQL
+   (an old tunnel domain from a previous run is re-pointed to the new URL;
+   `127.0.0.1`/`localhost` domains stay intact, headless ones are skipped)
+4. Clears the cache and re-runs `app:install --activate --force
+   StripePaymentsApp` (registration binds to the shop URL; no-op if already
+   installed)
 
-**Required Caddy scheme fix:** cloudflared terminates TLS and forwards the
-request to the shop as plain `http://`, so Shopware sees scheme `http` and
-rejects the request with a 400 "Domain Mapping Misconfiguration" (the
-registered sales channel domain is `https://…`). Inject the original scheme
-for the tunnel host in `docker-compose.override.yml`:
+`make dev-tunnel-down` removes the tunnel container.
+
+**Caddy scheme fix (automated):** cloudflared terminates TLS and forwards the
+request to the shop as plain `http://`, so Shopware would see scheme `http`
+and reject the request with a 400 "Domain Mapping Misconfiguration" (the
+registered sales channel domain is `https://…`). The `web` service in
+`docker-compose.override.yml` injects the original scheme for the tunnel host:
 
 ```yaml
 services:
   web:
     environment:
       CADDY_EXTRA_CONFIG: |
-        @tunnelHost host <tunnel-host>.trycloudflare.com
+        @tunnelHost host {$TUNNEL_HOST:localhost.invalid}
       CADDY_SERVER_EXTRA_DIRECTIVES: request_header @tunnelHost X-Forwarded-Proto https
 ```
 
-(`request_header` needs a named matcher — inline matchers don't parse there.
-The matcher is scoped to the tunnel host, so http://127.0.0.1:8000 keeps
-working with scheme `http`.)
+`{$TUNNEL_HOST:localhost.invalid}` is resolved by Caddy from the container
+env (`TUNNEL_HOST` comes from `.env.local`); the `localhost.invalid` fallback
+never matches, so without a tunnel http://127.0.0.1:8000 keeps working with
+scheme `http`. (`request_header` needs a named matcher — inline matchers
+don't parse there.)
 
-Caveat: the quick-tunnel URL changes on every tunnel restart — repeat these
-steps after a restart. Production (`yoxa.eu`) needs no tunnel.
+Caveat: the quick-tunnel URL changes on every tunnel restart — re-run
+`make dev-tunnel` after a restart. Production (`yoxa.eu`) needs no tunnel.
 
 ### 5. Connect the Stripe account
 

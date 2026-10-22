@@ -23,3 +23,11 @@ services:
     ports:
       - "9200"
 ###< shopware/elasticsearch ###
+
+###> shopware/dev-tunnel ###
+  web:
+    environment:
+      CADDY_EXTRA_CONFIG: |
+        @tunnelHost host {$$TUNNEL_HOST:localhost.invalid}
+      CADDY_SERVER_EXTRA_DIRECTIVES: request_header @tunnelHost X-Forwarded-Proto https
+###< shopware/dev-tunnel ###

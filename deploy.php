@@ -188,6 +188,27 @@ task('sw:tax-snippets', static function () {
 
     run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
 });
+// Mailer: use the environment MAILER_DSN (deletes core.mailerSettings.emailAgent
+// so Shopware falls back to the .env DSN; local = Mailpit, server = shared .env).
+// Idempotent (see SQL file).
+task('sw:mailer-env', static function () {
+    $env = run('grep -E "^DATABASE_URL" {{deploy_path}}/shared/.env | head -1');
+    if (!preg_match('#^DATABASE_URL=["\']?mysql://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^"\']+)#', $env, $m)) {
+        writeln('<comment>sw:mailer-env: could not parse DATABASE_URL, skipping</comment>');
+        return;
+    }
+
+    [, $user, $pass, $host, $port, $db] = $m;
+    $port = $port ?: '3306';
+
+    $sql = '{{release_path}}/configure-mailer-env.sql';
+    if (!test("[ -f $sql ]")) {
+        writeln('<comment>sw:mailer-env: SQL file not found, skipping</comment>');
+        return;
+    }
+
+    run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
+});
 
 // Regenerates media/thumbnail storage paths (media.path) that are NULL.
 // The 6.7 upgrade nulls paths and expects the post-update indexer to rebuild
@@ -211,6 +232,7 @@ task('sw:deploy', [
     'sw:plugin:install:all',
     'sw:plugin:update:all',
     'sw:tax-snippets',
+    'sw:mailer-env',
     'sw:cache:clear',
 ]);
 

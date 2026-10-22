@@ -36,7 +36,7 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Deploy to production (yoxa.eu)
-        if: github.ref != 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: deployphp/action@master
         with:
           private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
@@ -46,7 +46,7 @@ jobs:
           skip-ssh-setup: false
 
       - name: Deploy to test (test.yoxa.eu)
-        if: github.ref == 'refs/heads/main'
+        if: github.ref != 'refs/heads/main'
         uses: deployphp/action@master
         with:
           private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}

@@ -1,23 +1,13 @@
 name: deploy
-env:
-  # Use the same ssh-agent socket value across all jobs
-  # Useful when a GH action is using SSH behind-the-scenes
-  SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-  HOST: ${{ secrets.HOST }}
-  USERNAME: ${{ secrets.USERNAME}}
-  KEY: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
-  PASSPHRASE: ${{ secrets.WEBHOST_SSH_PASSPHRASE }}
-  REPO_KEY: ${{ secrets.PRIVATE_REPO_KEY }}
-  CODESPACE_KEY: ${{ secrets.CODESPACE_PRIVATE_KEY }} 
-  REPO_PASSPHRASE: ${{ secrets.REPO_PASSPHRASE }} 
-  ID_ED25519_PRIVATE_KEY: ${{ secrets.ID_ED25519_PRIVATE_KEY }}
-  FORMATTED_KEY: ${{ secrets.FORMATTED_KEY }}
 
+env:
+  # Deployer connection settings, override via repository secrets (Settings -> Secrets and variables -> Actions -> Secrets)
+  HOST: ${{ secrets.HOST }}
+  USERNAME: ${{ secrets.USERNAME }}
 
 on:
- push:
-  branches: 
-    - main
+  push:
+    # main -> production (yoxa.eu), any other branch -> test (test.yoxa.eu)
 
 # It is important to specify "concurrency" for the workflow,
 # to prevent concurrency between different deploys.
@@ -26,23 +16,41 @@ concurrency: production_environment
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ShopwareDeployer
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ssh-key: ${{ secrets.PRIVATE_REPO_KEY }}
+          ssh-known-hosts: github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.3'
+          extensions: curl, dom, fileinfo, gd, intl, mbstring, openssl, pdo, pdo_mysql, simplexml, xml, zip, sodium, opcache
+          tools: composer:v2
 
       - name: Install dependencies
-        run: composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Deploy
+      - name: Deploy to production (yoxa.eu)
+        if: github.ref == 'refs/heads/main'
         uses: deployphp/action@master
         with:
-          private-key: $FORMATTED_KEY
-          dep: --file=testIt.php deploy
-          deployer-binary: "vendor/deployer/deployer/dep"
+          private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
+          dep: deploy production-server
+          deployer-binary: "vendor/bin/dep"
           verbosity: -vvv
-          skip-ssh-setup: false    
+          skip-ssh-setup: false
+
+      - name: Deploy to test (test.yoxa.eu)
+        if: github.ref != 'refs/heads/main'
+        uses: deployphp/action@master
+        with:
+          private-key: ${{ secrets.WEBHOST_SSH_SHOPWARE_PRIVATE_KEY }}
+          dep: deploy test-server
+          deployer-binary: "vendor/bin/dep"
+          verbosity: -vvv
+          skip-ssh-setup: false

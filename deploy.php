@@ -233,6 +233,28 @@ task('sw:mailer-env', static function () {
     run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
 });
 
+// "Payment / Shipping" CMS page: remove the stale PayPal sentence
+// ("Versandkostenfrei! Zahlung mit Paypal." / "Payment with Paypal.").
+// Idempotent (see SQL file).
+task('sw:shipping-payment-cms', static function () {
+    $env = run('grep -E "^DATABASE_URL" {{deploy_path}}/shared/.env | head -1');
+    if (!preg_match('#^DATABASE_URL=["\']?mysql://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^"\']+)#', $env, $m)) {
+        writeln('<comment>sw:shipping-payment-cms: could not parse DATABASE_URL, skipping</comment>');
+        return;
+    }
+
+    [, $user, $pass, $host, $port, $db] = $m;
+    $port = $port ?: '3306';
+
+    $sql = '{{release_path}}/shipping-payment-cms.sql';
+    if (!test("[ -f $sql ]")) {
+        writeln('<comment>sw:shipping-payment-cms: SQL file not found, skipping</comment>');
+        return;
+    }
+
+    run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
+});
+
 // Flow builder: order confirmation mail only after payment.
 // Deactivates the "Order placed" flow and points the "Payment enters status
 // paid" flow's mail action at the order_confirmation_mail template, then
@@ -282,6 +304,7 @@ task('sw:deploy', [
     'sw:flow-after-payment',
     'sw:mail-template-after-payment',
     'sw:mailer-env',
+    'sw:shipping-payment-cms',
     'sw:cache:clear',
 ]);
 

@@ -255,9 +255,9 @@ task('sw:shipping-payment-cms', static function () {
     run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
 });
 
-// Legal pages (AGB / Impressum / Widerruf): write the complete
+// Legal pages (AGB / Impressum / Datenschutz / Widerruf): write the complete
 // Kleinunternehmer (§ 19 UStG) texts, resolved from
-// core.basicInformation.tosPage / imprintPage / revocationPage.
+// core.basicInformation.tosPage / imprintPage / privacyPage / revocationPage.
 // Idempotent (see SQL file).
 task('sw:legal-pages', static function () {
     $env = run('grep -E "^DATABASE_URL" {{deploy_path}}/shared/.env | head -1');

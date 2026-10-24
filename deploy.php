@@ -255,6 +255,29 @@ task('sw:shipping-payment-cms', static function () {
     run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
 });
 
+// Legal pages (AGB / Impressum / Datenschutz / Widerruf): write the complete
+// Kleinunternehmer (§ 19 UStG) texts, resolved from
+// core.basicInformation.tosPage / imprintPage / privacyPage / revocationPage.
+// Idempotent (see SQL file).
+task('sw:legal-pages', static function () {
+    $env = run('grep -E "^DATABASE_URL" {{deploy_path}}/shared/.env | head -1');
+    if (!preg_match('#^DATABASE_URL=["\']?mysql://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^"\']+)#', $env, $m)) {
+        writeln('<comment>sw:legal-pages: could not parse DATABASE_URL, skipping</comment>');
+        return;
+    }
+
+    [, $user, $pass, $host, $port, $db] = $m;
+    $port = $port ?: '3306';
+
+    $sql = '{{release_path}}/legal-pages-kleinunternehmer.sql';
+    if (!test("[ -f $sql ]")) {
+        writeln('<comment>sw:legal-pages: SQL file not found, skipping</comment>');
+        return;
+    }
+
+    run("mysql --default-character-set=utf8mb4 -h{$host} -P{$port} -u{$user} -p'{$pass}' {$db} < {$sql}");
+});
+
 // Flow builder: order confirmation mail only after payment.
 // Deactivates the "Order placed" flow and points the "Payment enters status
 // paid" flow's mail action at the order_confirmation_mail template, then
@@ -305,6 +328,7 @@ task('sw:deploy', [
     'sw:mail-template-after-payment',
     'sw:mailer-env',
     'sw:shipping-payment-cms',
+    'sw:legal-pages',
     'sw:cache:clear',
 ]);
 
